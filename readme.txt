@@ -1,7 +1,6 @@
-weewx-vedirect
+weewx-mate
 
-This is a driver for weewx that collects data from Victron devices such as the
-MPPT using the VEDirect interface.
+This is a driver for weewx that collects data from MATE3 solar controllers.
 
 Installation
 
@@ -9,11 +8,11 @@ Installation
 
 1) download the driver
 
-wget -O weewx-vedirect.zip https://github.com/matthewwall/weewx-vedirect/archive/master.zip
+wget -O weewx-mate.zip https://github.com/matthewwall/weewx-mate/archive/master.zip
 
 2) install the driver
 
-wee_extension --install weewx-vedirect.zip
+wee_extension --install weewx-mate.zip
 
 3) configure the driver
 

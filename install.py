@@ -1,18 +1,18 @@
-# installer for victron vedirect driver
+# installer for mate driver
 # Copyright 2018 Matthew Wall
 
 from setup import ExtensionInstaller
 
 def loader():
-    return VEDirectInstaller()
+    return MATEInstaller()
 
-class VEDirectInstaller(ExtensionInstaller):
+class MATEInstaller(ExtensionInstaller):
     def __init__(self):
-        super(VEDirectInstaller, self).__init__(
+        super(MATEInstaller, self).__init__(
             version="0.1",
-            name='vedirect',
-            description='Collect data from Victron VEDirect devices',
+            name='mate',
+            description='Collect data from MATE3 solar controller',
             author="Matthew Wall",
             author_email="mwall@users.sourceforge.net",
-            files=[('bin/user', ['bin/user/vedirect.py'])]
+            files=[('bin/user', ['bin/user/mate.py'])]
             )

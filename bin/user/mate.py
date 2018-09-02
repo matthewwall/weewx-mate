@@ -1,19 +1,9 @@
 #!/usr/bin/python
 # Copyright 2018 Matthew Wall
 #
-# Driver for Victron devices that communicate using VEDirect, including
-# MPPT and BMV.
-#
-# tested with:
-#  Victron MPPT 100 I 30 SmartSolar charge controller (vedirect-to-usb)
-#
-# based on vedirect.py by Janne Kario
-#   https://github.com/karioja/vedirect
-# uses extensions to vedirect.py by victronPi
-#   http://majora.myqnapcloud.com:10080/root/victronPi/blob/master/vedirect.py
+# Driver for MATE3 solar controller.
 
 import os
-import serial
 import syslog
 import time
 
@@ -21,20 +11,19 @@ import weewx.drivers
 import weewx.engine
 import weewx.units
 
-DRIVER_NAME = "VEDirect"
+DRIVER_NAME = "MATE"
 DRIVER_VERSION = "0.1"
-DEFAULT_PORT = '/dev/ttyUSB0'
 
 
 def loader(config_dict, engine):
-    return VEDirectDriver(**config_dict[DRIVER_NAME])
+    return MATEDriver(**config_dict[DRIVER_NAME])
 
 def confeditor_loader():
-    return VEDirectConfigurationEditor()
+    return MATEConfigurationEditor()
 
 
 def logmsg(dst, msg):
-    syslog.syslog(dst, 'vedirect: %s' % msg)
+    syslog.syslog(dst, 'mate: %s' % msg)
 
 def logdbg(msg):
     logmsg(syslog.LOG_DEBUG, msg)
@@ -46,7 +35,7 @@ def logerr(msg):
     logmsg(syslog.LOG_ERR, msg)
 
 
-# schema specifically for victron devices
+# schema specifically for MATE devices
 schema = [
     ('dateTime',  'INTEGER NOT NULL UNIQUE PRIMARY KEY'),
     ('usUnits',   'INTEGER NOT NULL'),
@@ -98,39 +87,40 @@ weewx.units.MetricUnits['group_range'] = 'cm'
 weewx.units.MetricWXUnits['group_range'] = 'cm'
 
 
-class VEDirectConfigurationEditor(weewx.drivers.AbstractConfEditor):
+class MATEConfigurationEditor(weewx.drivers.AbstractConfEditor):
     @property
     def default_stanza(self):
         return """
-[VEDirect]
-    # This section is for the VEDirect driver.
+[MATE]
+    # This section is for the MATE driver.
 
-    # The port to which the device is connected
-    host = /dev/ttyUSB0
+    # The hostname or IP address of the MATE
+    host = 0.0.0.0
 
     # The driver to use
-    driver = user.vedirect
+    driver = user.mate
 """
     def prompt_for_settings(self):
-        print "Specify the serial port on which the station is connected, for"
-        print "example /dev/ttyUSB0 or /dev/ttyS0."
-        port = self._prompt('port', '/dev/ttyUSB0')
-        return {'port': port}
+        print "Specify the hostname or IP address of the MATE, for example:"
+        print "mate.example.com or 192.168.0.5"
+        host = self._prompt('host', '192.168.0.2')
+        return {'host': host}
 
-class VEDirectDriver(weewx.drivers.AbstractDevice):
+
+class MATEDriver(weewx.drivers.AbstractDevice):
 
     def __init__(self, **stn_dict):
         loginf('driver version is %s' % DRIVER_VERSION)
-        self._model = stn_dict.get('model', 'VEDirect')
+        self._model = stn_dict.get('model', 'MATE3')
         self._poll_interval = int(stn_dict.get('poll_interval', 1))
         loginf('poll interval is %s' % self._poll_interval)
-        port = stn_dict.get('port', DEFAULT_PORT)
-        loginf('port is %s' % port)
-        self._ved = VEDirect(port)
-        self._ved.open()
+        host = stn_dict['host']
+        loginf('host is %s' % host)
+        self._mate = VEDirect(host)
+        self._mate.open()
 
     def closePort(self):
-        self._ved.close()
+        self._mate.close()
 
     @property
     def hardware_name(self):
@@ -138,7 +128,7 @@ class VEDirectDriver(weewx.drivers.AbstractDevice):
 
     def genLoopPackets(self):
         while True:
-            data = self._ved.get_data()
+            data = self._mate.get_data()
             if data:
                 logdbg("raw data: %s" % data)
                 packet = self._data_to_packet(data)
@@ -150,30 +140,7 @@ class VEDirectDriver(weewx.drivers.AbstractDevice):
 
     def _data_to_packet(self, data):
         # convert raw data to database fields
-        # {'LOAD': 'OFF', 'H19': '467', 'VPV': '56790', 'ERR': '0', 'FW': '130', 'I': '6900', 'H21': '96', 'PID': '0xA056', 'H20': '4', 'H23': '117', 'H22': '22', 'HSDS': '25', 'SER#': 'HQ1804IWW4P', 'V': '13580', 'CS': '3', 'PPV': '96'}
-
-        # FW: firmware version
-        # SER#: serial number
-        # PID: product ID
-        # HSDS: 
-        
         pkt = dict()
-        if 'ERR' in data:
-            pkt['error'] = 0 if data.get('ERR', '0') == '0' else 1
-        if 'LOAD' in data:
-            pkt['load'] = 0 if data.get('LOAD', 'OFF') == 'OFF' else 1
-        if 'CS' in data:
-            pkt['CS'] = int(data['CS'])
-        for k in ['PPV']:
-            if k in data:
-                pkt[k] = int(data[k])
-        for k in ['I', 'V', 'VPV']:
-            if k in data:
-                pkt[k] = float(data[k]) / 1000.0
-        for k in ['H19', 'H20', 'H21', 'H22', 'H23']:
-            if k in data:
-                pkt[k] = int(data[k])
-
         # if we actually ended up with something, then make it a weewx packet
         if pkt:
             pkt['dateTime'] = int(time.time() + 0.5)
@@ -181,25 +148,10 @@ class VEDirectDriver(weewx.drivers.AbstractDevice):
         return pkt
 
 
-class VEDirect:
+class MATE:
 
-    (HEX, WAIT_HEADER, IN_KEY, IN_VALUE, IN_CHECKSUM) = range(5)
-
-    def __init__(self, port):
-        self.ser = None
-        self.port = port
-        self.baudrate = 19200
-        self.timeout = 3
-        self.header1 = '\r'
-        self.header2 = '\n'
-        self.hexmarker = ':'
-        self.delimiter = '\t'
-        self.key = ''
-        self.start = ''
-        self.value = ''
-        self.bytes_sum = 0;
-        self.state = self.WAIT_HEADER
-        self.values = {}
+    def __init__(self, host):
+        self.host = host
 
     def __enter__(self):
         self.open()
@@ -209,87 +161,16 @@ class VEDirect:
         self.close()
 
     def open(self):
-        self.ser = serial.Serial(
-            self.port, self.baudrate, timeout=self.timeout)
+        pass
 
     def close(self):
-        if self.ser is not None:
-            self.ser.close()
-            self.ser = None
-
-    def input(self, byte):
-        if byte == self.hexmarker and self.state != self.IN_CHECKSUM:
-            self.state = self.HEX
-        if self.state == self.WAIT_HEADER:
-            self.bytes_sum += ord(byte)
-            if byte == self.header1:
-                self.state = self.WAIT_HEADER
-            elif byte == self.header2:
-                self.state = self.IN_KEY
-            return None
-        elif self.state == self.IN_KEY:
-            self.bytes_sum += ord(byte)
-            if byte == self.delimiter:
-                if self.start == self.key:
-                    self.start = 'ALL'
-                elif self.start == '':
-                    self.start = self.key
-                if self.key == 'Checksum':
-                    self.state = self.IN_CHECKSUM
-                else:
-                    self.state = self.IN_VALUE
-            else:
-                self.key += byte
-            return None
-        elif self.state == self.IN_VALUE:
-            self.bytes_sum += ord(byte)
-            if byte == self.header1:
-                self.state = self.WAIT_HEADER
-                self.values[self.key] = self.value;
-                self.key = '';
-                self.value = '';
-            else:
-                self.value += byte
-            return None
-        elif self.state == self.IN_CHECKSUM:
-            self.bytes_sum += ord(byte)
-            self.key = ''
-            self.value = ''
-            self.state = self.WAIT_HEADER
-            if self.bytes_sum % 256 == 0:
-                self.bytes_sum = 0
-                if self.start == 'ALL':
-                    self.start = ''
-                    return self.values
-                else:
-                    return None
-            else:
-                # malformed packet
-                self.bytes_sum = 0
-                self.start = ''
-                self.values = dict()
-        elif self.state == self.HEX:
-            self.bytes_sum = 0
-            if byte == self.header2:
-                self.state = self.WAIT_HEADER
-        else:
-            raise AssertionError()
-
-    def get_data(self):
-        while True:
-            byte = self.ser.read(1)
-            if byte:
-                packet = self.input(byte)
-                if packet is not None:
-                    return packet
-            else:
-                break
+        pass
 
 
-# define a main entry point for basic testing of the station without weewx
-# engine and service overhead.  invoke this as follows from the weewx root dir:
+# define a main entry point for basic testing of the device.  invoke this as
+# follows from the weewx root dir:
 #
-# PYTHONPATH=bin python bin/weewx/drivers/vedirect.py
+# PYTHONPATH=bin python bin/weewx/drivers/mate.py
 
 if __name__ == '__main__':
     import optparse
@@ -303,9 +184,9 @@ if __name__ == '__main__':
                       help='display driver version')
     parser.add_option('--debug', dest='debug', action='store_true',
                       help='display diagnostic information while running')
-    parser.add_option('--port', dest='port', metavar='PORT',
-                      help='serial port to which the station is connected',
-                      default=DEFAULT_PORT)
+    parser.add_option('--port', dest='host', metavar='HOST',
+                      help='hostname or IP address of the device',
+                      default='192.168.0.2')
 
     (options, args) = parser.parse_args()
 
@@ -316,7 +197,7 @@ if __name__ == '__main__':
     if options.debug:
         syslog.setlogmask(syslog.LOG_UPTO(syslog.LOG_DEBUG))
 
-    with VEDirect(options.port) as s:
+    with MATE(options.host) as s:
         while True:
             data = s.get_data()
             print "data:", data
