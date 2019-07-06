@@ -406,7 +406,7 @@ class MATEDriver(weewx.drivers.AbstractDevice):
                     yield packet
                 time.sleep(self._poll_interval)
             except IOError as e:
-                logerr("Failed attempt % of %d to get LOOP data: %s" %
+                logerr("Failed attempt %s of %s to get LOOP data: %s" %
                        (ntries, self.max_tries, e))
                 logdbg("Waiting %d seconds before retry" % self.retry_wait)
                 time.sleep(self.retry_wait)
