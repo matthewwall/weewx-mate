@@ -2,9 +2,11 @@ weewx-mate
 
 This is a driver for weewx that collects data from MATE3 solar controllers.
 
-Installation
+How to install this extension
 
-0) install weewx (see the weewx user guide)
+0) install weewx
+
+http://weewx.com/docs.html
 
 1) download the driver
 
