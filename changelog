@@ -1,4 +1,9 @@
+0.3 06jul2019
+* deal with bogus JSON replies
+
 0.2 05jul2019
+* added support for more types of devics
+* standarize configuration to one weewx instance per port
 * add python3 compatibility
 
 0.1 02sep2018

@@ -11,6 +11,7 @@
 # device.
 #
 # The following devices are recognized:
+#  GS - ?
 #  FX - inverter
 #  CC - charge controller
 #  FNDC - DC battery monitor
@@ -156,7 +157,7 @@ import weewx.engine
 import weewx.units
 
 DRIVER_NAME = "MATE"
-DRIVER_VERSION = "0.2"
+DRIVER_VERSION = "0.3"
 
 
 def loader(config_dict, engine):
@@ -491,10 +492,13 @@ class MATE:
         url = 'http://%s/Dev_status.cgi?Port=%s' % (self.host, self.port)
         req = urllib2.Request(url=url)
         resp = urllib2.urlopen(req).read(65535)
-        resp_obj = json.loads(resp)
-        logdbg("resp_obj: %s" % resp_obj)
-        return resp_obj
-
+        try:
+            resp_obj = json.loads(resp)
+            logdbg("resp_obj: %s" % resp_obj)
+            return resp_obj
+        except ValueError as e:
+            logerr("cannot parse data: %s (%s)" % (e, resp))
+        return dict()
 
 # define a main entry point for basic testing of the device.  invoke this as
 # follows from the weewx root dir:

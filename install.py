@@ -9,7 +9,7 @@ def loader():
 class MATEInstaller(ExtensionInstaller):
     def __init__(self):
         super(MATEInstaller, self).__init__(
-            version="0.2",
+            version="0.3",
             name='mate',
             description='Collect data from MATE3 solar controller',
             author="Matthew Wall",
